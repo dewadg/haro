@@ -1,0 +1,22 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  go_test:
+    strategy:
+      matrix:
+        go: ['1.14', '1.13']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go 1.14
+        uses: actions/setup-go@v2
+      - name: Checkout source code
+        uses: actions/checkout@v2
+      - name: Run go get
+        run: go get -v
+      - name: Run go test
+        run: go test -v -race ./...
