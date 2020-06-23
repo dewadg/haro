@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func Test_pubsub_Publish(t *testing.T) {
@@ -16,7 +17,7 @@ func Test_pubsub_Publish(t *testing.T) {
 		ctx        context.Context
 		topicName  string
 		payload    interface{}
-		resultWg   sync.WaitGroup
+		resultWg   *sync.WaitGroup
 		resultChan chan string
 	}
 	tests := []struct {
@@ -35,7 +36,7 @@ func Test_pubsub_Publish(t *testing.T) {
 				ctx:        context.Background(),
 				topicName:  "topic",
 				payload:    "payload",
-				resultWg:   sync.WaitGroup{},
+				resultWg:   &sync.WaitGroup{},
 				resultChan: make(chan string, 2), // Accept only 2 results
 			},
 			wantErr: false,
@@ -60,11 +61,70 @@ func Test_pubsub_Publish(t *testing.T) {
 				ctx:        context.Background(),
 				topicName:  "topic",
 				payload:    "payload",
-				resultWg:   sync.WaitGroup{},
+				resultWg:   &sync.WaitGroup{},
 				resultChan: make(chan string, 2), // Accept only 2 results
 			},
 			wantErr: true,
 			configureMock: func(p Pubsub, fields fields, args args) {
+			},
+		},
+		{
+			name: "Event published with retry and delay",
+			fields: fields{
+				registry: map[string]*topic{},
+			},
+			args: args{
+				ctx:        context.Background(),
+				topicName:  "topic",
+				payload:    "payload",
+				resultWg:   &sync.WaitGroup{},
+				resultChan: make(chan string, 2), // Accept only 2 results
+			},
+			wantErr: false,
+			configureMock: func(p Pubsub, fields fields, args args) {
+				p.DeclareTopic(args.topicName, args.payload)
+
+				args.resultWg.Add(2)
+
+				p.RegisterSubscriber(
+					args.topicName,
+					func(ctx context.Context, payload string) error {
+						defer args.resultWg.Done()
+
+						return errors.New("error")
+					},
+					Retry(2),
+					DelayRetry(100*time.Millisecond),
+				)
+			},
+		},
+		{
+			name: "Event published with error handler",
+			fields: fields{
+				registry: map[string]*topic{},
+			},
+			args: args{
+				ctx:        context.Background(),
+				topicName:  "topic",
+				payload:    "payload",
+				resultWg:   &sync.WaitGroup{},
+				resultChan: make(chan string, 2), // Accept only 2 results
+			},
+			wantErr: false,
+			configureMock: func(p Pubsub, fields fields, args args) {
+				p.DeclareTopic(args.topicName, args.payload)
+
+				args.resultWg.Add(1)
+
+				p.RegisterSubscriber(
+					args.topicName,
+					func(ctx context.Context, payload string) error {
+						return errors.New("error")
+					},
+					OnError(func(err error) {
+						args.resultWg.Done()
+					}),
+				)
 			},
 		},
 	}
@@ -79,6 +139,8 @@ func Test_pubsub_Publish(t *testing.T) {
 			if err := p.Publish(tt.args.ctx, tt.args.topicName, tt.args.payload); (err != nil) != tt.wantErr {
 				t.Errorf("Publish() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
+			tt.args.resultWg.Wait()
 		})
 	}
 }

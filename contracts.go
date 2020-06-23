@@ -14,5 +14,5 @@ type Pubsub interface {
 	Publish(ctx context.Context, topicName string, payload interface{}) error
 
 	// RegisterSubscriber registers a subscriber for a topic. You can register more than 1 subscriber
-	RegisterSubscriber(topicName string, callback Subscriber) error
+	RegisterSubscriber(topicName string, callback Subscriber, configs ...ConfigFunc) error
 }
