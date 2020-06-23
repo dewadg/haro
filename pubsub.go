@@ -36,13 +36,10 @@ func (p *pubsub) DeclareTopic(topicName string, payload interface{}) error {
 }
 
 func (p *pubsub) Publish(ctx context.Context, topicName string, payload interface{}) error {
-	p.mutex.Lock()
 	_topic, err := p.registry.Get(topicName)
 	if err != nil {
-		p.mutex.Unlock()
 		return err
 	}
-	p.mutex.Unlock()
 
 	go func() {
 		_topic.Events <- event{
@@ -92,13 +89,10 @@ func (p *pubsub) RegisterSubscriber(topicName string, handler Subscriber, config
 
 	var _topic *topic
 
-	p.mutex.Lock()
 	_topic, err := p.registry.Get(topicName)
 	if err != nil {
-		p.mutex.Unlock()
 		return err
 	}
-	p.mutex.Unlock()
 
 	cfg := &config{}
 	for _, configure := range configs {
