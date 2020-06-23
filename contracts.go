@@ -8,7 +8,7 @@ type Subscriber interface{}
 // Pubsub exposes functions for pubsub operations
 type Pubsub interface {
 	// DeclareTopic registers a topic with desired payload type
-	DeclareTopic(topicName string, payload interface{})
+	DeclareTopic(topicName string, payload interface{}) error
 
 	// Publish dispatches an event to a topic
 	Publish(ctx context.Context, topicName string, payload interface{}) error

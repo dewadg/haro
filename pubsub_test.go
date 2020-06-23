@@ -3,6 +3,7 @@ package haro
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 )
@@ -216,6 +217,67 @@ func Test_pubsub_RegisterSubscriber(t *testing.T) {
 
 			if err := p.RegisterSubscriber(tt.args.topicName, tt.args.handler); (err != nil) != tt.wantErr {
 				t.Errorf("RegisterSubscriber() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_pubsub_DeclareTopic(t *testing.T) {
+	type fields struct {
+		registry registry
+		mutex    sync.Mutex
+	}
+	type args struct {
+		topicName string
+		payload   interface{}
+	}
+	tests := []struct {
+		name          string
+		fields        fields
+		args          args
+		wantErr       bool
+		configureMock func(fields fields, args args)
+	}{
+		{
+			name: "Successfully registered a topic",
+			fields: fields{
+				registry: make(map[string]*topic),
+				mutex:    sync.Mutex{},
+			},
+			args: args{
+				topicName: "test",
+				payload:   "string",
+			},
+			wantErr:       false,
+			configureMock: func(fields fields, args args) {},
+		},
+		{
+			name: "Duplicate topic with different payload type",
+			fields: fields{
+				registry: make(map[string]*topic),
+				mutex:    sync.Mutex{},
+			},
+			args: args{
+				topicName: "test",
+				payload:   "string",
+			},
+			wantErr: true,
+			configureMock: func(fields fields, args args) {
+				fields.registry.New("test", reflect.TypeOf(0).String())
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &pubsub{
+				registry: tt.fields.registry,
+				mutex:    tt.fields.mutex,
+			}
+
+			tt.configureMock(tt.fields, tt.args)
+
+			if err := p.DeclareTopic(tt.args.topicName, tt.args.payload); (err != nil) != tt.wantErr {
+				t.Errorf("DeclareTopic() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package haro
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"reflect"
 	"sync"
@@ -14,12 +15,24 @@ type pubsub struct {
 	mutex    sync.Mutex
 }
 
-func (p *pubsub) DeclareTopic(topicName string, payload interface{}) {
+func (p *pubsub) DeclareTopic(topicName string, payload interface{}) error {
 	p.mutex.Lock()
 	if !p.registry.Exists(topicName) {
 		p.createTopic(topicName, payload)
+	} else {
+		_topic, err := p.registry.Get(topicName)
+		if err != nil {
+			return err
+		}
+
+		reflectedPayload := reflect.TypeOf(payload)
+		if reflectedPayload.String() != _topic.PayloadType {
+			return fmt.Errorf("Topic `%s` is already declared with payload type %s", topicName, _topic.PayloadType)
+		}
 	}
 	p.mutex.Unlock()
+
+	return nil
 }
 
 func (p *pubsub) Publish(ctx context.Context, topicName string, payload interface{}) error {
