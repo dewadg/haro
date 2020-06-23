@@ -13,6 +13,7 @@ type event struct {
 type subscriber struct {
 	ID      string
 	Handler Subscriber
+	Config  *config
 }
 
 type topic struct {
