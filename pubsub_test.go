@@ -84,7 +84,7 @@ func Test_pubsub_Publish(t *testing.T) {
 			configureMock: func(p Pubsub, fields fields, args args) {
 				p.DeclareTopic(args.topicName, args.payload)
 
-				args.resultWg.Add(2)
+				args.resultWg.Add(3)
 
 				p.RegisterSubscriber(
 					args.topicName,

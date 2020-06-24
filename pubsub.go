@@ -143,7 +143,7 @@ func (p *pubsub) callSubscriberWithRetry(_subscriber subscriber, _topic *topic, 
 	var retryCount int
 	var lastError error
 
-	for retryCount < _subscriber.Config.Retry {
+	for retryCount <= _subscriber.Config.Retry {
 		if err := p.callSubscriber(_subscriber.Handler, _topic, evt); err != nil {
 			lastError = err
 			retryCount++
