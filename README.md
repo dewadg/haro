@@ -13,7 +13,7 @@ go get github.com/dewadg/haro
 
 Create a new instance:
 ```go
-p := pubsub.New()
+p := haro.New()
 ```
 
 ### Declaring topic
@@ -73,10 +73,9 @@ p.RegisterSubscriber(
 Note that callback should have signature as a function with 2 parameters; `context.Context` and payload (payload type should match topic type).
 
 We can also specify custom behavior for the registered subscriber. Currently, there are following possible behavior configurations:
-- `pubsub.Retry(count int)` for configuring number of maximum retry when error occurred
-- `pubsub.DelayRetry(duration time.Duration)` for configuring delay between each retry
-- `pubsub.OnRetry(func(retryCount int, lastError error))` for specifying callback when retry is performed
-- `pubsub.OnError(func(err error))` for specifying callback when error is occured
+- `haro.Retry(count int)` for configuring number of maximum retry when error occurred
+- `haro.DelayRetry(duration time.Duration)` for configuring delay between each retry
+- `haro.OnError(func(err error))` for specifying callback when error is occured
 
 ```go
 // Set retry
@@ -85,12 +84,9 @@ p.RegisterSubscriber(
     func(ctx context.Context, payload string) error {
         // Do something, and if error this callback will be called 2 times more
     },
-    pubsub.Retry(2), // Will retry 2 times before returning the error
-    pubsub.DelayRetry(2 * time.Second), // Set 2 seconds delay between retry
-    OnRetry(func(i int, err error) {
-        // Do something when retry
-    }),
-    OnError(func(err error) {
+    haro.Retry(2), // Will retry 2 times before returning the error
+    haro.DelayRetry(2 * time.Second), // Set 2 seconds delay between retry
+    haro.OnError(func(err error) {
         // Do something when error
     }),
 )
