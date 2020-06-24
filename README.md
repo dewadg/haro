@@ -1,6 +1,6 @@
 # Haro
 
-Basic callback-based pubsub library with topic capability.
+Callback-based pubsub library with topic capability.
 
 [![test](https://github.com/dewadg/haro/workflows/Tests/badge.svg?branch=master "test")](https://github.com/dewadg/haro/actions)
 
