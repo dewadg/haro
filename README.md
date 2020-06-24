@@ -32,7 +32,7 @@ err = p.DeclareTopic("uintTopic", uint(0))
 ```
 
 ### Registering subscribers
-`Pubub.RegisterSubscriber` can be used to register a subscriber (callback).
+`Pubsub.RegisterSubscriber` can be used to register a subscriber (callback).
 
 - A topic should be declared before registering a subscriber
 - A topic can have more than 1 subscriber
@@ -106,6 +106,22 @@ err = p.Publish(context.TODO(), "uintTopic", uint(1))
 ```
 
 `Pubsub.Publish` will return error if payload type between publishing and topic are mismatch
+
+## Mocking
+You can easily mock your test since haro exposes an interface:
+```go
+// Pubsub exposes functions for pubsub operations
+type Pubsub interface {
+	// DeclareTopic registers a topic with desired payload type
+	DeclareTopic(topicName string, payload interface{}) error
+
+	// Publish dispatches an event to a topic
+	Publish(ctx context.Context, topicName string, payload interface{}) error
+
+	// RegisterSubscriber registers a subscriber for a topic. You can register more than 1 subscriber
+	RegisterSubscriber(topicName string, callback Subscriber, configs ...ConfigFunc) error
+}
+```
 
 ## Limitations
 
