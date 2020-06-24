@@ -46,7 +46,7 @@ p.RegisterSubscriber(
         fmt.Println(strings.ToUppercase(payload))
 
         return nil
-    },,
+    },
 )
 
 // Prints the payload to lowercase
@@ -56,7 +56,7 @@ p.RegisterSubscriber(
         fmt.Println(strings.ToLowercase(payload))
         
         return nil
-    },,
+    },
 )
 
 // Prints the payload length
@@ -66,7 +66,7 @@ p.RegisterSubscriber(
         fmt.Println(len(payload))
         
         return nil
-    },,
+    },
 )
 ```
 
