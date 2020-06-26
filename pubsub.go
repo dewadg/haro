@@ -130,7 +130,7 @@ func (p *pubsub) runSubscribers(_topic *topic) {
 					err = p.callSubscriber(subscriber.Handler, _topic, evt)
 				}
 
-				if subscriber.Config.OnError != nil {
+				if err != nil && subscriber.Config.OnError != nil {
 					subscriber.Config.OnError(err)
 				}
 			}
