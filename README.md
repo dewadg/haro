@@ -4,6 +4,7 @@ Callback-based pubsub library with topic capability.
 
 [![go report card](https://goreportcard.com/badge/github.com/dewadg/haro "go report card")](https://goreportcard.com/report/github.com/dewadg/haro)
 [![test](https://github.com/dewadg/haro/workflows/Tests/badge.svg?branch=master "test")](https://github.com/dewadg/haro/actions)
+[![Coverage Status](https://coveralls.io/repos/github/dewadg/haro/badge.svg?branch=master)](https://coveralls.io/github/dewadg/haro?branch=master)
 [![Go.Dev reference](https://img.shields.io/badge/go.dev-reference-blue?logo=go&logoColor=white)](https://pkg.go.dev/github.com/dewadg/haro?tab=doc)
 
 ## Usage
