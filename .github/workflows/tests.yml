@@ -28,7 +28,7 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           go test -v -race -cover -coverprofile=coverage.out ./...
           mkdir coverage
-          gcov2lcov -infile=coverage.out -outfile=./coverage/coverage.lcov
+          gcov2lcov -infile=coverage.out -outfile=./coverage/lcov.info
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:
