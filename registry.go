@@ -25,7 +25,7 @@ type topic struct {
 type registry map[string]*topic
 
 // Exists :nodoc:
-func (t registry) Exists(topicNamestring) bool {
+func (t registry) Exists(topicName string) bool {
 	_, exists := t[topicName]
 
 	return exists
