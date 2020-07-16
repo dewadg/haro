@@ -19,11 +19,11 @@ jobs:
       - name: Run go get
         run: |
           go get -v
-          go get -u -v github.com/jandelgado/gcov2lcov
       - name: Run go test and generate coverage info
         run: |
           go test -v -race -cover -coverprofile=coverage.out ./...
           mkdir coverage
+          go get -u -v github.com/jandelgado/gcov2lcov
           gcov2lcov -inputfile=coverage.out -outfile=./coverage/coverage.lcov
       - name: Coveralls
         uses: coverallsapp/github-action@master
