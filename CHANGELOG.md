@@ -1,6 +1,41 @@
 
+<a name="v1.0.3"></a>
+## [v1.0.3](https://github.com/dewadg/haro/compare/v1.0.2...v1.0.3) (2020-07-16)
+
+### Chore
+
+* remove coverage.out file
+* update CI
+
+### Ci
+
+* update CI
+* update CI
+* update CI
+* update CI
+* update CI
+* update CI
+* adjust Coveralls config
+* add Coveralls
+* add code coverage on CI test
+
+### Docs
+
+* update docs
+* add Coveralls badge
+* add goreportcard badge
+
+### Fix
+
+* fix accidental code change
+
+
 <a name="v1.0.2"></a>
 ## [v1.0.2](https://github.com/dewadg/haro/compare/v1.0.1...v1.0.2) (2020-06-27)
+
+### Chore
+
+* release v1.0.2
 
 ### Docs
 
