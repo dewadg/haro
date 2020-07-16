@@ -14,15 +14,16 @@ jobs:
     steps:
       - name: Setup Go 1.14
         uses: actions/setup-go@v2
+      - name: Checkout source code
+        uses: actions/checkout@v2
+      - name: Configure tools
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           go get -u -v github.com/jandelgado/gcov2lcov
-      - name: Checkout source code
-        uses: actions/checkout@v2
-      - name: Run go get
+      - name: Install dependencies
         run: |
           go get -v
-      - name: Run go test and generate coverage info
+      - name: Run unit tests and generate coverage info
         run: |
           go test -v -race -cover -coverprofile=coverage.out ./...
           mkdir coverage
