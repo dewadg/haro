@@ -25,6 +25,7 @@ jobs:
           go get -v
       - name: Run unit tests and generate coverage info
         run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
           go test -v -race -cover -coverprofile=coverage.out ./...
           mkdir coverage
           gcov2lcov -inputfile=coverage.out -outfile=./coverage/coverage.lcov
