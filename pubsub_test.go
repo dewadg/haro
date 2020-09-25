@@ -43,9 +43,17 @@ func Test_pubsub_Publish(t *testing.T) {
 			configureMock: func(p Pubsub, fields fields, args args) {
 				p.DeclareTopic(args.topicName, args.payload)
 
-				p.RegisterSubscriber(args.topicName, func(ctx context.Context, payload string) error {
-					return nil
-				})
+				args.resultWg.Add(1)
+
+				p.RegisterSubscriber(
+					args.topicName,
+					func(ctx context.Context, payload string) error {
+						return nil
+					},
+					OnSuccess(func() {
+						args.resultWg.Done()
+					}),
+				)
 
 				p.RegisterSubscriber(args.topicName, func(ctx context.Context, payload string) error {
 					return errors.New("error")

@@ -6,6 +6,7 @@ type config struct {
 	Retry      int
 	RetryDelay time.Duration
 	OnError    func(error)
+	OnSuccess  func()
 }
 
 // ConfigFunc is signature of function for doing configuration
@@ -29,5 +30,12 @@ func DelayRetry(delay time.Duration) ConfigFunc {
 func OnError(onError func(error)) ConfigFunc {
 	return func(cfg *config) {
 		cfg.OnError = onError
+	}
+}
+
+// OnSuccess specify what to do when no error occured
+func OnSuccess(onSuccess func()) ConfigFunc {
+	return func(cfg *config) {
+		cfg.OnSuccess = onSuccess
 	}
 }
