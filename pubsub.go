@@ -133,6 +133,10 @@ func (p *pubsub) runSubscribers(_topic *topic) {
 				if err != nil && subscriber.Config.OnError != nil {
 					subscriber.Config.OnError(err)
 				}
+
+				if err == nil && subscriber.Config.OnSuccess != nil {
+					subscriber.Config.OnSuccess()
+				}
 			}
 			break
 		}
