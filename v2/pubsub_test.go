@@ -2,7 +2,6 @@ package haro
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 )
@@ -82,7 +81,6 @@ func Test_topic_Subscribe_int(t1 *testing.T) {
 			args: args{
 				sub: func(wg *sync.WaitGroup) Subscriber[int] {
 					return func(ctx context.Context, p int) error {
-						fmt.Println("HAHAHA")
 						wg.Done()
 
 						return nil
@@ -104,6 +102,63 @@ func Test_topic_Subscribe_int(t1 *testing.T) {
 
 			tt.fields.wg.Add(1)
 			_ = t.Publish(context.Background(), 1)
+			tt.fields.wg.Wait()
+		})
+	}
+}
+
+func Test_topic_Subscribe_struct(t1 *testing.T) {
+	type example struct {
+		val int
+	}
+	type fields struct {
+		mtx    sync.Mutex
+		subs   []Subscriber[example]
+		stream chan payloadPair[example]
+		wg     sync.WaitGroup
+	}
+	type args struct {
+		sub func(wg *sync.WaitGroup) Subscriber[example]
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{
+			name: "success",
+			fields: fields{
+				mtx:    sync.Mutex{},
+				subs:   make([]Subscriber[example], 0),
+				stream: make(chan payloadPair[example]),
+				wg:     sync.WaitGroup{},
+			},
+			args: args{
+				sub: func(wg *sync.WaitGroup) Subscriber[example] {
+					return func(ctx context.Context, p example) error {
+						wg.Done()
+
+						return nil
+					}
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &topic[example]{
+				mtx:    tt.fields.mtx,
+				subs:   tt.fields.subs,
+				stream: tt.fields.stream,
+			}
+
+			t.run()
+			t.Subscribe(tt.args.sub(&tt.fields.wg))
+
+			tt.fields.wg.Add(1)
+			_ = t.Publish(context.Background(), example{
+				val: 1,
+			})
 			tt.fields.wg.Wait()
 		})
 	}
