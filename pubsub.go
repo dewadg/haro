@@ -67,7 +67,7 @@ func callSubscriber[Payload any](
 		if err != nil && cfg.onError != nil {
 			cfg.onError(err)
 		}
-		if err == nil {
+		if err == nil && cfg.onSuccess != nil {
 			cfg.onSuccess()
 		}
 	} else {
