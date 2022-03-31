@@ -22,6 +22,7 @@ jobs:
           go get -u -v github.com/jandelgado/gcov2lcov
       - name: Install dependencies
         run: |
+          go version
           go get -v
       - name: Run unit tests and generate coverage info
         run: |
