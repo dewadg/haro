@@ -3,6 +3,7 @@ package haro
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 type Subscriber[Payload any] func(context.Context, Payload) error
@@ -19,17 +20,28 @@ type payloadPair[Payload any] struct {
 }
 
 type topic[Payload any] struct {
+	cfg    *config
 	mtx    sync.Mutex
 	subs   []Subscriber[Payload]
 	stream chan payloadPair[Payload]
 }
 
-func DeclareTopic[Payload any]() Topic[Payload] {
-	return &topic[Payload]{
+func DeclareTopic[Payload any](cfgFuncs ...ConfigFunc) Topic[Payload] {
+	cfg := config{}
+	for _, f := range cfgFuncs {
+		f(&cfg)
+	}
+
+	t := &topic[Payload]{
+		cfg:    &cfg,
 		mtx:    sync.Mutex{},
 		subs:   make([]Subscriber[Payload], 0),
 		stream: make(chan payloadPair[Payload], 0),
 	}
+
+	t.run()
+
+	return t
 }
 
 func (t *topic[any]) run() {
@@ -38,11 +50,44 @@ func (t *topic[any]) run() {
 			select {
 			case p := <-t.stream:
 				for _, sub := range t.subs {
-					_ = sub(p.ctx, p.payload)
+					callSubscriber[any](t.cfg, sub, p)
 				}
 			}
 		}
 	}()
+}
+
+func callSubscriber[Payload any](
+	cfg *config,
+	sub Subscriber[Payload],
+	p payloadPair[Payload],
+) {
+	if cfg.retry <= 0 {
+		err := sub(p.ctx, p.payload)
+		if err != nil && cfg.onError != nil {
+			cfg.onError(err)
+		}
+		if err == nil {
+			cfg.onSuccess()
+		}
+	} else {
+		for i := 0; i < cfg.retry; i++ {
+			err := sub(p.ctx, p.payload)
+			if err != nil && cfg.onError != nil {
+				cfg.onError(err)
+			}
+
+			if err != nil {
+				time.Sleep(cfg.retryDelay)
+			} else {
+				if cfg.onSuccess != nil {
+					cfg.onSuccess()
+				}
+
+				break
+			}
+		}
+	}
 }
 
 func (t *topic[any]) Publish(ctx context.Context, a any) error {
