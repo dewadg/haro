@@ -2,184 +2,110 @@ package haro
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-type pubsub struct {
-	registry registry
-	mutex    sync.Mutex
+type Subscriber[Payload any] func(context.Context, Payload) error
+
+type Topic[Payload any] interface {
+	Publish(context.Context, Payload) error
+
+	Subscribe(sub Subscriber[Payload])
 }
 
-func (p *pubsub) DeclareTopic(topicName string, payload interface{}) error {
-	p.mutex.Lock()
-	if !p.registry.Exists(topicName) {
-		p.createTopic(topicName, payload)
-	} else {
-		_topic, err := p.registry.Get(topicName)
-		if err != nil {
-			return err
-		}
-
-		reflectedPayload := reflect.TypeOf(payload)
-		if reflectedPayload.String() != _topic.PayloadType {
-			return fmt.Errorf("Topic `%s` is already declared with payload type %s", topicName, _topic.PayloadType)
-		}
-	}
-	p.mutex.Unlock()
-
-	return nil
+type payloadPair[Payload any] struct {
+	ctx     context.Context
+	payload Payload
 }
 
-func (p *pubsub) Publish(ctx context.Context, topicName string, payload interface{}) error {
-	_topic, err := p.registry.Get(topicName)
-	if err != nil {
-		return err
+type topic[Payload any] struct {
+	cfg    *config
+	mtx    sync.Mutex
+	subs   []Subscriber[Payload]
+	stream chan payloadPair[Payload]
+}
+
+func DeclareTopic[Payload any](cfgFuncs ...ConfigFunc) Topic[Payload] {
+	cfg := config{}
+	for _, f := range cfgFuncs {
+		f(&cfg)
 	}
 
+	t := &topic[Payload]{
+		cfg:    &cfg,
+		mtx:    sync.Mutex{},
+		subs:   make([]Subscriber[Payload], 0),
+		stream: make(chan payloadPair[Payload], 0),
+	}
+
+	t.run()
+
+	return t
+}
+
+func (t *topic[any]) run() {
 	go func() {
-		_topic.Events <- event{
-			Ctx:     ctx,
-			Payload: payload,
+		for {
+			select {
+			case p := <-t.stream:
+				for _, sub := range t.subs {
+					callSubscriber[any](t.cfg, sub, p)
+				}
+			}
+		}
+	}()
+}
+
+func callSubscriber[Payload any](
+	cfg *config,
+	sub Subscriber[Payload],
+	p payloadPair[Payload],
+) {
+	if cfg.retry <= 0 {
+		err := sub(p.ctx, p.payload)
+		if err != nil && cfg.onError != nil {
+			cfg.onError(err)
+		}
+		if err == nil && cfg.onSuccess != nil {
+			cfg.onSuccess()
+		}
+	} else {
+		for i := 0; i < cfg.retry; i++ {
+			err := sub(p.ctx, p.payload)
+			if err != nil && cfg.onError != nil {
+				cfg.onError(err)
+			}
+
+			if err != nil {
+				time.Sleep(cfg.retryDelay)
+			} else {
+				if cfg.onSuccess != nil {
+					cfg.onSuccess()
+				}
+
+				break
+			}
+		}
+	}
+}
+
+func (t *topic[any]) Publish(ctx context.Context, a any) error {
+	go func() {
+		t.stream <- payloadPair[any]{
+			ctx:     ctx,
+			payload: a,
 		}
 	}()
 
 	return nil
 }
 
-func (p *pubsub) validateSubscriber(handler Subscriber) error {
-	handlerType := reflect.TypeOf(handler)
-
-	// Check if subscriber is indeed a function
-	if handlerType.Kind() != reflect.TypeOf(func() {}).Kind() {
-		return ErrSubscriberNotAFunction
+func (t *topic[any]) Subscribe(sub Subscriber[any]) {
+	t.mtx.Lock()
+	if t.subs == nil {
+		t.subs = make([]Subscriber[any], 0)
 	}
-
-	// Check if subscriber has exactly 2 parameters
-	if handlerType.NumIn() != 2 {
-		return ErrSubscriberInvalidParameters
-	}
-
-	// Check subscriber first param
-	if handlerType.In(0).String() != "context.Context" {
-		return ErrSubscriberInvalidFirstParameter
-	}
-
-	// Check if subscriber has exactly 1 return type
-	if handlerType.NumOut() != 1 {
-		return ErrSubscriberInvalidReturnTypes
-	}
-
-	// Check if subscriber has exactly 1 return type
-	if handlerType.Out(0).String() != "error" {
-		return ErrSubscriberInvalidFirstReturnType
-	}
-
-	return nil
-}
-
-func (p *pubsub) RegisterSubscriber(topicName string, handler Subscriber, configs ...ConfigFunc) error {
-	if err := p.validateSubscriber(handler); err != nil {
-		return err
-	}
-
-	var _topic *topic
-
-	_topic, err := p.registry.Get(topicName)
-	if err != nil {
-		return err
-	}
-
-	cfg := &config{}
-	for _, configure := range configs {
-		configure(cfg)
-	}
-
-	_topic.Subscribers = append(_topic.Subscribers, subscriber{
-		ID:      uuid.New().String(),
-		Handler: handler,
-		Config:  cfg,
-	})
-
-	return nil
-}
-
-func (p *pubsub) createTopic(topicName string, payload interface{}) *topic {
-	reflectedPayload := reflect.TypeOf(payload)
-	_topic := p.registry.New(topicName, reflectedPayload.String())
-
-	go p.runSubscribers(_topic)
-
-	return _topic
-}
-
-func (p *pubsub) runSubscribers(_topic *topic) {
-	for {
-		select {
-		case evt := <-_topic.Events:
-			for _, subscriber := range _topic.Subscribers {
-				var err error
-				// If subscriber is set to retry
-				if subscriber.Config.Retry > 0 {
-					err = p.callSubscriberWithRetry(subscriber, _topic, evt)
-				} else {
-					err = p.callSubscriber(subscriber.Handler, _topic, evt)
-				}
-
-				if err != nil && subscriber.Config.OnError != nil {
-					subscriber.Config.OnError(err)
-				}
-
-				if err == nil && subscriber.Config.OnSuccess != nil {
-					subscriber.Config.OnSuccess()
-				}
-			}
-			break
-		}
-	}
-}
-
-func (p *pubsub) callSubscriberWithRetry(_subscriber subscriber, _topic *topic, evt event) error {
-	var retryCount int
-	var lastError error
-
-	for retryCount <= _subscriber.Config.Retry {
-		if err := p.callSubscriber(_subscriber.Handler, _topic, evt); err != nil {
-			lastError = err
-			retryCount++
-
-			if _subscriber.Config.RetryDelay > 0 {
-				time.Sleep(_subscriber.Config.RetryDelay)
-			}
-		} else {
-			break
-		}
-	}
-
-	return lastError
-}
-
-func (p *pubsub) callSubscriber(handler Subscriber, _topic *topic, evt event) error {
-	// Check payload type, reject if mismatch
-	payloadType := reflect.TypeOf(evt.Payload)
-	if payloadType.String() != _topic.PayloadType {
-		return ErrPayloadTypeMismatch
-	}
-
-	args := []reflect.Value{
-		reflect.ValueOf(evt.Ctx),
-		reflect.ValueOf(evt.Payload),
-	}
-
-	results := reflect.ValueOf(handler).Call(args)
-	err := results[0].Interface()
-
-	if err != nil {
-		return err.(error)
-	}
-	return nil
+	t.subs = append(t.subs, sub)
+	t.mtx.Unlock()
 }

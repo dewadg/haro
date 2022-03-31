@@ -3,352 +3,256 @@ package haro
 import (
 	"context"
 	"errors"
-	"reflect"
+	"math"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func Test_pubsub_Publish(t *testing.T) {
+func Test_topic_Publish_int(t1 *testing.T) {
 	type fields struct {
-		registry registry
+		cfg    *config
+		mtx    sync.Mutex
+		subs   []Subscriber[int]
+		stream chan payloadPair[int]
 	}
 	type args struct {
-		ctx        context.Context
-		topicName  string
-		payload    interface{}
-		resultWg   *sync.WaitGroup
-		resultChan chan string
+		ctx context.Context
+		a   int
 	}
 	tests := []struct {
-		name          string
-		fields        fields
-		args          args
-		wantErr       bool
-		configureMock func(p Pubsub, fields fields, args args)
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
 	}{
 		{
-			name: "Event published",
+			name: "success",
 			fields: fields{
-				registry: map[string]*topic{},
+				cfg:    &config{},
+				mtx:    sync.Mutex{},
+				subs:   make([]Subscriber[int], 0),
+				stream: make(chan payloadPair[int]),
 			},
 			args: args{
-				ctx:        context.Background(),
-				topicName:  "topic",
-				payload:    "payload",
-				resultWg:   &sync.WaitGroup{},
-				resultChan: make(chan string, 2), // Accept only 2 results
+				ctx: context.Background(),
+				a:   2,
 			},
 			wantErr: false,
-			configureMock: func(p Pubsub, fields fields, args args) {
-				p.DeclareTopic(args.topicName, args.payload)
+		},
+	}
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &topic[int]{
+				cfg:    tt.fields.cfg,
+				mtx:    tt.fields.mtx,
+				subs:   tt.fields.subs,
+				stream: tt.fields.stream,
+			}
+			if err := t.Publish(tt.args.ctx, tt.args.a); (err != nil) != tt.wantErr {
+				t1.Errorf("Publish() error = %v, wantErr %v", err, tt.wantErr)
+			}
 
-				args.resultWg.Add(1)
+			got := <-t.stream
+			if got.payload != tt.args.a {
+				t1.Errorf("Publish() error, got = %v, want %v", got, tt.args.a)
+			}
+		})
+	}
+}
 
-				p.RegisterSubscriber(
-					args.topicName,
-					func(ctx context.Context, payload string) error {
+func Test_topic_Subscribe_int(t1 *testing.T) {
+	type fields struct {
+		cfg    *config
+		mtx    sync.Mutex
+		subs   []Subscriber[int]
+		stream chan payloadPair[int]
+		wg     sync.WaitGroup
+	}
+	type args struct {
+		sub func(wg *sync.WaitGroup) Subscriber[int]
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{
+			name: "success",
+			fields: fields{
+				cfg:    &config{},
+				mtx:    sync.Mutex{},
+				subs:   make([]Subscriber[int], 0),
+				stream: make(chan payloadPair[int]),
+				wg:     sync.WaitGroup{},
+			},
+			args: args{
+				sub: func(wg *sync.WaitGroup) Subscriber[int] {
+					return func(ctx context.Context, p int) error {
+						wg.Done()
+
 						return nil
-					},
-					OnSuccess(func() {
-						args.resultWg.Done()
-					}),
-				)
-
-				p.RegisterSubscriber(args.topicName, func(ctx context.Context, payload string) error {
-					return errors.New("error")
-				})
-			},
-		},
-		{
-			name: "Undeclared topic",
-			fields: fields{
-				registry: map[string]*topic{},
-			},
-			args: args{
-				ctx:        context.Background(),
-				topicName:  "topic",
-				payload:    "payload",
-				resultWg:   &sync.WaitGroup{},
-				resultChan: make(chan string, 2), // Accept only 2 results
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
-			},
-		},
-		{
-			name: "Event published with retry and delay",
-			fields: fields{
-				registry: map[string]*topic{},
-			},
-			args: args{
-				ctx:        context.Background(),
-				topicName:  "topic",
-				payload:    "payload",
-				resultWg:   &sync.WaitGroup{},
-				resultChan: make(chan string, 2), // Accept only 2 results
-			},
-			wantErr: false,
-			configureMock: func(p Pubsub, fields fields, args args) {
-				p.DeclareTopic(args.topicName, args.payload)
-
-				args.resultWg.Add(3)
-
-				p.RegisterSubscriber(
-					args.topicName,
-					func(ctx context.Context, payload string) error {
-						defer args.resultWg.Done()
-
-						return errors.New("error")
-					},
-					Retry(2),
-					DelayRetry(100*time.Millisecond),
-				)
-			},
-		},
-		{
-			name: "Event published with error handler",
-			fields: fields{
-				registry: map[string]*topic{},
-			},
-			args: args{
-				ctx:        context.Background(),
-				topicName:  "topic",
-				payload:    "payload",
-				resultWg:   &sync.WaitGroup{},
-				resultChan: make(chan string, 2), // Accept only 2 results
-			},
-			wantErr: false,
-			configureMock: func(p Pubsub, fields fields, args args) {
-				p.DeclareTopic(args.topicName, args.payload)
-
-				args.resultWg.Add(1)
-
-				p.RegisterSubscriber(
-					args.topicName,
-					func(ctx context.Context, payload string) error {
-						return errors.New("error")
-					},
-					OnError(func(err error) {
-						args.resultWg.Done()
-					}),
-				)
+					}
+				},
 			},
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &pubsub{
-				registry: tt.fields.registry,
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &topic[int]{
+				cfg:    tt.fields.cfg,
+				mtx:    tt.fields.mtx,
+				subs:   tt.fields.subs,
+				stream: tt.fields.stream,
 			}
 
-			tt.configureMock(p, tt.fields, tt.args)
+			t.run()
+			t.Subscribe(tt.args.sub(&tt.fields.wg))
 
-			if err := p.Publish(tt.args.ctx, tt.args.topicName, tt.args.payload); (err != nil) != tt.wantErr {
-				t.Errorf("Publish() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			tt.args.resultWg.Wait()
+			tt.fields.wg.Add(1)
+			_ = t.Publish(context.Background(), 1)
+			tt.fields.wg.Wait()
 		})
 	}
 }
 
-func Test_pubsub_RegisterSubscriber(t *testing.T) {
+func Test_topic_Subscribe_struct(t1 *testing.T) {
+	type example struct {
+		val int
+	}
 	type fields struct {
-		registry registry
-		mutex    sync.Mutex
+		cfg    *config
+		mtx    sync.Mutex
+		subs   []Subscriber[example]
+		stream chan payloadPair[example]
+		wg     sync.WaitGroup
 	}
 	type args struct {
-		topicName string
-		handler   Subscriber
+		sub func(wg *sync.WaitGroup) Subscriber[example]
 	}
 	tests := []struct {
-		name          string
-		fields        fields
-		args          args
-		wantErr       bool
-		configureMock func(p Pubsub, fields fields, args args)
+		name   string
+		fields fields
+		args   args
 	}{
 		{
-			name: "Successfully registered a subscriber",
+			name: "success",
 			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
+				cfg:    &config{},
+				mtx:    sync.Mutex{},
+				subs:   make([]Subscriber[example], 0),
+				stream: make(chan payloadPair[example]),
+				wg:     sync.WaitGroup{},
 			},
 			args: args{
-				topicName: "test",
-				handler: func(ctx context.Context, payload string) error {
-					return nil
+				sub: func(wg *sync.WaitGroup) Subscriber[example] {
+					return func(ctx context.Context, p example) error {
+						wg.Done()
+
+						return nil
+					}
 				},
-			},
-			wantErr: false,
-			configureMock: func(p Pubsub, fields fields, args args) {
-				p.DeclareTopic(args.topicName, "")
-			},
-		},
-		{
-			name: "Undeclared topic",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				handler: func(ctx context.Context, payload string) error {
-					return nil
-				},
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
-			},
-		},
-		{
-			name: "Handler not a function",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				handler:   "function",
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
-			},
-		},
-		{
-			name: "Handler parameter count invalid",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				handler:   func() {},
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
-			},
-		},
-		{
-			name: "Handler first param is not a Context",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				handler:   func(ctx int, payload int) {},
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
-			},
-		},
-		{
-			name: "Handler return type invalid",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				handler: func(ctx context.Context, payload int) {
-				},
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
-			},
-		},
-		{
-			name: "Handler return type is not an error",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				handler: func(ctx context.Context, payload int) int {
-					return 0
-				},
-			},
-			wantErr: true,
-			configureMock: func(p Pubsub, fields fields, args args) {
 			},
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &pubsub{
-				registry: tt.fields.registry,
-				mutex:    tt.fields.mutex,
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &topic[example]{
+				cfg:    tt.fields.cfg,
+				mtx:    tt.fields.mtx,
+				subs:   tt.fields.subs,
+				stream: tt.fields.stream,
 			}
 
-			tt.configureMock(p, tt.fields, tt.args)
+			t.run()
+			t.Subscribe(tt.args.sub(&tt.fields.wg))
 
-			if err := p.RegisterSubscriber(tt.args.topicName, tt.args.handler); (err != nil) != tt.wantErr {
-				t.Errorf("RegisterSubscriber() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			tt.fields.wg.Add(1)
+			_ = t.Publish(context.Background(), example{
+				val: 1,
+			})
+			tt.fields.wg.Wait()
 		})
 	}
 }
 
-func Test_pubsub_DeclareTopic(t *testing.T) {
-	type fields struct {
-		registry registry
-		mutex    sync.Mutex
-	}
-	type args struct {
-		topicName string
-		payload   interface{}
-	}
-	tests := []struct {
-		name          string
-		fields        fields
-		args          args
-		wantErr       bool
-		configureMock func(fields fields, args args)
-	}{
-		{
-			name: "Successfully registered a topic",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				payload:   "string",
-			},
-			wantErr:       false,
-			configureMock: func(fields fields, args args) {},
-		},
-		{
-			name: "Duplicate topic with different payload type",
-			fields: fields{
-				registry: make(map[string]*topic),
-				mutex:    sync.Mutex{},
-			},
-			args: args{
-				topicName: "test",
-				payload:   "string",
-			},
-			wantErr: true,
-			configureMock: func(fields fields, args args) {
-				fields.registry.New("test", reflect.TypeOf(0).String())
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &pubsub{
-				registry: tt.fields.registry,
-				mutex:    tt.fields.mutex,
-			}
+func Test_topic_PublishSubscribe_OnSuccess(t1 *testing.T) {
+	var counter int32
+	var wg sync.WaitGroup
 
-			tt.configureMock(tt.fields, tt.args)
+	t := DeclareTopic[int](
+		OnSuccess(func() {
+			atomic.AddInt32(&counter, 1)
+		}),
+	)
 
-			if err := p.DeclareTopic(tt.args.topicName, tt.args.payload); (err != nil) != tt.wantErr {
-				t.Errorf("DeclareTopic() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
+	t.Subscribe(func(ctx context.Context, p int) error {
+		wg.Done()
+		return nil
+	})
+
+	wg.Add(1)
+	_ = t.Publish(context.Background(), 1)
+	wg.Wait()
+
+	if counter != 1 {
+		t1.Errorf("got %v, want %v", counter, 1)
+	}
+}
+
+func Test_topic_PublishSubscribe_OnError(t1 *testing.T) {
+	var counter int32
+	var wg sync.WaitGroup
+
+	t := DeclareTopic[int](
+		OnError(func(err error) {
+			atomic.AddInt32(&counter, 1)
+		}),
+	)
+
+	t.Subscribe(func(ctx context.Context, p int) error {
+		wg.Done()
+		return errors.New("error")
+	})
+
+	wg.Add(1)
+	_ = t.Publish(context.Background(), 1)
+	wg.Wait()
+
+	if counter != 1 {
+		t1.Errorf("got %v, want %v", counter, 1)
+	}
+}
+
+func Test_topic_PublishSubscribe_RetryDelay(t1 *testing.T) {
+	var counter int32
+	var wg sync.WaitGroup
+
+	t := DeclareTopic[int](
+		Retry(3),
+		DelayRetry(1*time.Second),
+		OnError(func(err error) {
+			atomic.AddInt32(&counter, 1)
+		}),
+	)
+
+	t.Subscribe(func(ctx context.Context, p int) error {
+		wg.Done()
+		return errors.New("error")
+	})
+
+	wg.Add(3)
+	now := time.Now()
+	_ = t.Publish(context.Background(), 1)
+	wg.Wait()
+
+	if counter != 3 {
+		t1.Errorf("got %v, want %v", counter, 3)
+	}
+
+	diff := now.Sub(time.Now()).Seconds()
+	if math.Abs(diff) < 2 {
+		t1.Errorf("got diff %v, want %v", diff, 2)
 	}
 }
