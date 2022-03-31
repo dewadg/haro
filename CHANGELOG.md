@@ -1,6 +1,40 @@
 
+<a name="v2.0.0"></a>
+## [v2.0.0](https://github.com/dewadg/haro/compare/v1.1.0...v2.0.0) (2022-03-31)
+
+### Ci
+
+* adjust workflow
+
+### Feat
+
+* implement config
+* initial commit for generics support
+
+### Fix
+
+* fix on success hook
+
+### Refactor
+
+* merge to root
+
+### Test
+
+* update bench
+* update bench
+* update bench
+* add benchmark
+* add benchmark
+* add test for struct pubsub
+
+
 <a name="v1.1.0"></a>
 ## [v1.1.0](https://github.com/dewadg/haro/compare/v1.0.3...v1.1.0) (2020-09-25)
+
+### Docs
+
+* update changelog
 
 ### Feat
 
