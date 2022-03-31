@@ -7,11 +7,20 @@ import (
 
 func BenchmarkPublish_int(b *testing.B) {
 	ps := New()
+	outputChan := make(chan int, b.N)
 
 	_ = ps.DeclareTopic("int", 0)
 
+	_ = ps.RegisterSubscriber("int", func(ctx context.Context, p int) error {
+		outputChan <- p
+
+		return nil
+	})
+
 	for i := 0; i < b.N; i++ {
 		_ = ps.Publish(context.Background(), "int", 1)
+
+		<-outputChan
 	}
 }
 
@@ -41,13 +50,22 @@ func BenchmarkPublish_struct(b *testing.B) {
 	}
 
 	ps := New()
+	outputChan := make(chan d, b.N)
 
 	_ = ps.DeclareTopic("struct", d{})
+
+	_ = ps.RegisterSubscriber("struct", func(ctx context.Context, p d) error {
+		outputChan <- p
+
+		return nil
+	})
 
 	for i := 0; i < b.N; i++ {
 		_ = ps.Publish(context.Background(), "struct", d{
 			id:   1,
 			name: "test",
 		})
+
+		<-outputChan
 	}
 }
