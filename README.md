@@ -29,7 +29,7 @@ intTopic.Subscribe(func(ctx context.Context, p int) error {
 })
 
 stringTopic.Subscribe(func(ctx context.Context, p string) error {
-return nil
+    return nil
 })
 ```
 
