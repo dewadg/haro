@@ -22,13 +22,13 @@ jobs:
         run: |
           go version
           go get -v
-          go get -u -v github.com/jandelgado/gcov2lcov
       - name: Run unit tests and generate coverage info
         run: |
           go test -v -race -cover -coverprofile=coverage.out ./...
-          mkdir coverage
-          $(go env GOPATH)/bin/gcov2lcov -infile=coverage.out -outfile=./coverage/lcov.info
+      - name: Convert coverage to lcov
+        uses: jandelgado/gcov2lcov-action@v1
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: coverage.lcov
