@@ -181,10 +181,10 @@ func Test_topic_PublishSubscribe_OnSuccess(t1 *testing.T) {
 	t := DeclareTopic[int]()
 
 	t.Subscribe(func(ctx context.Context, p int) error {
-		wg.Done()
 		return nil
 	}, OnSuccess(func() {
 		atomic.AddInt32(&counter, 1)
+		wg.Done()
 	}))
 
 	wg.Add(1)
@@ -203,10 +203,10 @@ func Test_topic_PublishSubscribe_OnError(t1 *testing.T) {
 	t := DeclareTopic[int]()
 
 	t.Subscribe(func(ctx context.Context, p int) error {
-		wg.Done()
 		return errors.New("error")
 	}, OnError(func(err error) {
 		atomic.AddInt32(&counter, 1)
+		wg.Done()
 	}))
 
 	wg.Add(1)
@@ -226,13 +226,13 @@ func Test_topic_PublishSubscribe_RetryDelay(t1 *testing.T) {
 
 	t.Subscribe(
 		func(ctx context.Context, p int) error {
-			wg.Done()
 			return errors.New("error")
 		},
 		Retry(3),
 		DelayRetry(1*time.Second),
 		OnError(func(err error) {
 			atomic.AddInt32(&counter, 1)
+			wg.Done()
 		}),
 	)
 
