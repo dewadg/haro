@@ -12,9 +12,9 @@ import (
 
 func Test_topic_Publish_int(t1 *testing.T) {
 	type fields struct {
-		cfg    *config
+		cfg    *subscriberConfig
 		mtx    sync.Mutex
-		subs   []Subscriber[int]
+		subs   []subscriberPair[int]
 		stream chan payloadPair[int]
 	}
 	type args struct {
@@ -30,9 +30,9 @@ func Test_topic_Publish_int(t1 *testing.T) {
 		{
 			name: "success",
 			fields: fields{
-				cfg:    &config{},
+				cfg:    &subscriberConfig{},
 				mtx:    sync.Mutex{},
-				subs:   make([]Subscriber[int], 0),
+				subs:   make([]subscriberPair[int], 0),
 				stream: make(chan payloadPair[int]),
 			},
 			args: args{
@@ -45,7 +45,6 @@ func Test_topic_Publish_int(t1 *testing.T) {
 	for _, tt := range tests {
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &topic[int]{
-				cfg:    tt.fields.cfg,
 				mtx:    tt.fields.mtx,
 				subs:   tt.fields.subs,
 				stream: tt.fields.stream,
@@ -64,9 +63,9 @@ func Test_topic_Publish_int(t1 *testing.T) {
 
 func Test_topic_Subscribe_int(t1 *testing.T) {
 	type fields struct {
-		cfg    *config
+		cfg    *subscriberConfig
 		mtx    sync.Mutex
-		subs   []Subscriber[int]
+		subs   []subscriberPair[int]
 		stream chan payloadPair[int]
 		wg     sync.WaitGroup
 	}
@@ -81,9 +80,9 @@ func Test_topic_Subscribe_int(t1 *testing.T) {
 		{
 			name: "success",
 			fields: fields{
-				cfg:    &config{},
+				cfg:    &subscriberConfig{},
 				mtx:    sync.Mutex{},
-				subs:   make([]Subscriber[int], 0),
+				subs:   make([]subscriberPair[int], 0),
 				stream: make(chan payloadPair[int]),
 				wg:     sync.WaitGroup{},
 			},
@@ -101,7 +100,6 @@ func Test_topic_Subscribe_int(t1 *testing.T) {
 	for _, tt := range tests {
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &topic[int]{
-				cfg:    tt.fields.cfg,
 				mtx:    tt.fields.mtx,
 				subs:   tt.fields.subs,
 				stream: tt.fields.stream,
@@ -122,9 +120,9 @@ func Test_topic_Subscribe_struct(t1 *testing.T) {
 		val int
 	}
 	type fields struct {
-		cfg    *config
+		cfg    *subscriberConfig
 		mtx    sync.Mutex
-		subs   []Subscriber[example]
+		subs   []subscriberPair[example]
 		stream chan payloadPair[example]
 		wg     sync.WaitGroup
 	}
@@ -139,9 +137,9 @@ func Test_topic_Subscribe_struct(t1 *testing.T) {
 		{
 			name: "success",
 			fields: fields{
-				cfg:    &config{},
+				cfg:    &subscriberConfig{},
 				mtx:    sync.Mutex{},
-				subs:   make([]Subscriber[example], 0),
+				subs:   make([]subscriberPair[example], 0),
 				stream: make(chan payloadPair[example]),
 				wg:     sync.WaitGroup{},
 			},
@@ -159,7 +157,6 @@ func Test_topic_Subscribe_struct(t1 *testing.T) {
 	for _, tt := range tests {
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &topic[example]{
-				cfg:    tt.fields.cfg,
 				mtx:    tt.fields.mtx,
 				subs:   tt.fields.subs,
 				stream: tt.fields.stream,
@@ -181,16 +178,14 @@ func Test_topic_PublishSubscribe_OnSuccess(t1 *testing.T) {
 	var counter int32
 	var wg sync.WaitGroup
 
-	t := DeclareTopic[int](
-		OnSuccess(func() {
-			atomic.AddInt32(&counter, 1)
-		}),
-	)
+	t := DeclareTopic[int]()
 
 	t.Subscribe(func(ctx context.Context, p int) error {
 		wg.Done()
 		return nil
-	})
+	}, OnSuccess(func() {
+		atomic.AddInt32(&counter, 1)
+	}))
 
 	wg.Add(1)
 	_ = t.Publish(context.Background(), 1)
@@ -205,16 +200,14 @@ func Test_topic_PublishSubscribe_OnError(t1 *testing.T) {
 	var counter int32
 	var wg sync.WaitGroup
 
-	t := DeclareTopic[int](
-		OnError(func(err error) {
-			atomic.AddInt32(&counter, 1)
-		}),
-	)
+	t := DeclareTopic[int]()
 
 	t.Subscribe(func(ctx context.Context, p int) error {
 		wg.Done()
 		return errors.New("error")
-	})
+	}, OnError(func(err error) {
+		atomic.AddInt32(&counter, 1)
+	}))
 
 	wg.Add(1)
 	_ = t.Publish(context.Background(), 1)
@@ -229,18 +222,19 @@ func Test_topic_PublishSubscribe_RetryDelay(t1 *testing.T) {
 	var counter int32
 	var wg sync.WaitGroup
 
-	t := DeclareTopic[int](
+	t := DeclareTopic[int]()
+
+	t.Subscribe(
+		func(ctx context.Context, p int) error {
+			wg.Done()
+			return errors.New("error")
+		},
 		Retry(3),
 		DelayRetry(1*time.Second),
 		OnError(func(err error) {
 			atomic.AddInt32(&counter, 1)
 		}),
 	)
-
-	t.Subscribe(func(ctx context.Context, p int) error {
-		wg.Done()
-		return errors.New("error")
-	})
 
 	wg.Add(3)
 	now := time.Now()

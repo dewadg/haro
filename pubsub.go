@@ -11,7 +11,7 @@ type Subscriber[Payload any] func(context.Context, Payload) error
 type Topic[Payload any] interface {
 	Publish(context.Context, Payload) error
 
-	Subscribe(sub Subscriber[Payload])
+	Subscribe(sub Subscriber[Payload], configurators ...SubscriberConfigFunc)
 }
 
 type payloadPair[Payload any] struct {
@@ -20,22 +20,20 @@ type payloadPair[Payload any] struct {
 }
 
 type topic[Payload any] struct {
-	cfg    *config
 	mtx    sync.Mutex
-	subs   []Subscriber[Payload]
+	subs   []subscriberPair[Payload]
 	stream chan payloadPair[Payload]
 }
 
-func DeclareTopic[Payload any](cfgFuncs ...ConfigFunc) Topic[Payload] {
-	cfg := config{}
-	for _, f := range cfgFuncs {
-		f(&cfg)
-	}
+type subscriberPair[Payload any] struct {
+	subscriber Subscriber[Payload]
+	cfg        *subscriberConfig
+}
 
+func DeclareTopic[Payload any]() Topic[Payload] {
 	t := &topic[Payload]{
-		cfg:    &cfg,
 		mtx:    sync.Mutex{},
-		subs:   make([]Subscriber[Payload], 0),
+		subs:   make([]subscriberPair[Payload], 0),
 		stream: make(chan payloadPair[Payload], 0),
 	}
 
@@ -49,8 +47,8 @@ func (t *topic[any]) run() {
 		for {
 			select {
 			case p := <-t.stream:
-				for _, sub := range t.subs {
-					callSubscriber[any](t.cfg, sub, p)
+				for _, pair := range t.subs {
+					callSubscriber[any](pair.cfg, pair.subscriber, p)
 				}
 			}
 		}
@@ -58,7 +56,7 @@ func (t *topic[any]) run() {
 }
 
 func callSubscriber[Payload any](
-	cfg *config,
+	cfg *subscriberConfig,
 	sub Subscriber[Payload],
 	p payloadPair[Payload],
 ) {
@@ -101,11 +99,21 @@ func (t *topic[any]) Publish(ctx context.Context, a any) error {
 	return nil
 }
 
-func (t *topic[any]) Subscribe(sub Subscriber[any]) {
+func (t *topic[any]) Subscribe(sub Subscriber[any], configurators ...SubscriberConfigFunc) {
 	t.mtx.Lock()
 	if t.subs == nil {
-		t.subs = make([]Subscriber[any], 0)
+		t.subs = make([]subscriberPair[any], 0)
 	}
-	t.subs = append(t.subs, sub)
+
+	var cfg subscriberConfig
+	for _, c := range configurators {
+		c(&cfg)
+	}
+
+	t.subs = append(t.subs, subscriberPair[any]{
+		subscriber: sub,
+		cfg:        &cfg,
+	})
+
 	t.mtx.Unlock()
 }
