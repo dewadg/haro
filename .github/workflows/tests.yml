@@ -24,11 +24,10 @@ jobs:
           go get -v
       - name: Run unit tests and generate coverage info
         run: |
-          export PATH=${GOROOT}/bin:$PATH
           go test -v -race -cover -coverprofile=coverage.out ./...
           go get -u -v github.com/jandelgado/gcov2lcov
           mkdir coverage
-          gcov2lcov -infile=coverage.out -outfile=./coverage/lcov.info
+          $GOBIN/gcov2lcov -infile=coverage.out -outfile=./coverage/lcov.info
       - name: Coveralls
         uses: coverallsapp/github-action@master
         with:
